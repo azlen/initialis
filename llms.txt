@@ -1,0 +1,51 @@
+# INITIĀLIS
+
+> Endless explorer for ornamental drop caps, illuminated lettering, and new typographic aesthetics, every one drawn in the browser: a letter, its frame and ground, an ornament that grows out of it, a texture, and two or three inks printed onto paper. Pick one and find more like it; download any as transparent PNGs, an animated WebP (also transparent) and an MP4.
+
+Site: https://initialis.azlen.me
+
+## Share links
+
+`https://initialis.azlen.me/?i=<code>` is one initial. `<code>` is either a ten-character id (a short link: the site keeps the settings under it), or the settings themselves: a JSON object, that initial's settings that differ from the renderer's defaults, as URL-safe base64 (no padding); after a `z.` prefix the JSON is deflate-raw compressed first. Opening it shows the initial alone, growing in.
+
+Add `&format=json` for `{ letter, face, font, settings, embed, page }` as JSON (CORS open), `embed` being the HTML to paste into a page to draw it, e.g. `https://initialis.azlen.me/?i=<code>&format=json`.
+
+`https://initialis.azlen.me/?c=<id>` is a collection of initials; `&format=json` gives `{ count, initials: [{ letter, face, font, settings }], page }`. A collection's long link is `#c=z.<code>`: a JSON list of settings objects, deflated and base64'd as above. `/api/s?id=<id>` gives what any short link holds as `{ k: "i" | "c", d }`.
+
+Every setting, with its section (letter, frame, ornament, texture, ink), range and label, is `PARAMS` in [render/src/params.js](https://initialis.azlen.me/render/src/params.js); `DEFAULTS` there fills in whatever a code leaves out. Inks are `inkA`, `inkB`, `inkC` and `paper`; other settings name an ink by `'A'`, `'B'`, `'C'` or `'paper'`.
+
+## Using an initial in a project
+
+- **As images or a video:** open its link, click it, and use download (the arrow-down scrap). The zip holds the initial on a transparent ground at 2400, 1200, 600 and 256 px, one printed on its paper, an animated WebP of it growing in on a transparent ground and an MP4 of it on its paper (when it grows), and its settings as JSON. This is the simplest and smallest way to put one on a page.
+- **Drawn live in a page, this one exactly, growing in, or a new one on every load:** the library, [lib/initialis.js](https://initialis.azlen.me/lib/initialis.js), works from any site (it brings its own render workers and fetches the fonts from here; CORS is open). One tag:
+
+  ```html
+  <script type="module" src="https://initialis.azlen.me/lib/initialis.js"></script>
+  <initialis-cap settings='{"text":"Q","font":"cinzel-700","frame":"circle","inkA":"#23305e"}' size="200" grow></initialis-cap>
+  ```
+
+  `settings` is the initial's settings as JSON (only what differs from `DEFAULTS`; `{"text":"Q"}` alone is a Q in the default style): take them from a share link's `&format=json` or a download's `.json` `params`, and keep them in the page, where they can be changed. `src` takes a share link or its code instead (a short link is looked up on the site each time, so prefer its settings). `seed="7"` gives a fresh one (the same seed, the same initial; none of these, a new one each load). `size` is in css px; `paper` prints it on its paper (otherwise the ink alone on a transparent ground); `grow` grows it in once it's on screen; `loop` again and again. Or in a script: `import { draw, grow, render, settings, random } from 'https://initialis.azlen.me/lib/initialis.js'`, then `await draw(canvas, { text: 'Q' })`, `await grow(canvas, P, { seconds: 2.4 })`, `await render(P, { size: 512 })` for an ImageBitmap, `await settings(link)` for a link's full settings, `await random(seed)` for a fresh one's. Each takes settings, a share link or its code. To add patterns, textures, frames, bands, corners, leaves or flowers of your own, write a small module (copy [lib/examples/chevrons.js](https://initialis.azlen.me/lib/examples/chevrons.js); [render/src/kinds/README.md](https://initialis.azlen.me/render/src/kinds/README.md) has what each family gets and gives back) and load it with `await use(url)`, or the tag's `use` attribute: it can live on any site, and its name then works in settings. Only the kinds an initial uses are fetched. Examples: [lib/example.html](https://initialis.azlen.me/lib/example.html). It needs WebGL2 in web workers (current Chrome, Edge, Firefox; Safari 17+).
+- **With text wrapped round it:** float it as an `<img>` on a transparent ground, with the same image as its `shape-outside`, so the lines follow the initial's own outline instead of a square. It has to be an `<img>`: a floated canvas doesn't reliably take the shape.
+
+  ```html
+  <img id="cap" alt="" width="230" height="230" style="float:left; shape-margin:12px; shape-image-threshold:.2">
+  <p>Your text…</p>
+  <script type="module">
+    import { draw } from 'https://initialis.azlen.me/lib/initialis.js';
+    const canvas = document.createElement('canvas');
+    await draw(canvas, { text: 'O', font: 'cinzel-700', frame: 'circle' }, { size: 460 });
+    const img = document.querySelector('#cap'), url = canvas.toDataURL();
+    img.src = url;
+    img.style.shapeOutside = `url("${url}")`;
+  </script>
+  ```
+
+  For text that isn't HTML (on a canvas, in a video) or a line breaker of your own, [Pretext](https://github.com/chenglou/pretext) lays text out one line at a time with `layoutNextLine`, each to a width you give it: read the initial's alpha at that line's height to find how far in the line can start.
+- **If your page can't load scripts from this site** (some sandboxes only allow a few script hosts): don't redraw an initial by hand. Give the person its link; they can download it as images and add those to the project.
+- **Changing it:** edit `settings` within the ranges in `PARAMS`, then make a new link (URL-safe base64 of the JSON) and open it, or hand the settings object straight to the library.
+
+## More
+
+- [README.md](https://initialis.azlen.me/README.md): what's where, running it locally.
+- [AGENTS.md](https://initialis.azlen.me/AGENTS.md): for an agent helping someone use or remix it; ask them for something of their own before restyling.
+- [render/fonts/FONTS.md](https://initialis.azlen.me/render/fonts/FONTS.md): every font and its licence.

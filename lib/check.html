@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INITIĀLIS renderer check</title>
+<link rel="icon" href="../icons/icon-32.png">
+<style>
+	:root { --paper: #f3efe6; --ink: #2b2824; --quiet: #857d70; --bad: #c4512c; }
+	body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.45 Georgia, serif; }
+	main { padding: 24px 18px 60px; max-width: 1100px; }
+	h1 { font-weight: normal; font-style: italic; font-size: 26px; margin: 0 0 6px; }
+	p { margin: 0 0 10px; }
+	button { font: inherit; padding: 4px 12px; margin-right: 8px; cursor: pointer; }
+	#status { margin: 12px 0; font-style: italic; overflow-wrap: anywhere; }
+	#slow { margin: 12px 0; font-size: 14px; color: var(--quiet); overflow-wrap: anywhere; }
+	.diff { display: inline-flex; gap: 2px; margin: 0 10px 10px 0; flex-direction: column; font-size: 12px; color: var(--quiet); }
+	.diff div { display: flex; gap: 2px; }
+	.diff canvas { width: 128px; height: 128px; background: #fff; }
+	.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<main>
+<h1>Renderer check</h1>
+<p>Draws an initial for every kind the renderer has (every pattern, texture, frame, band, corner, leaf, flower and the other choices), the built-in styles, the kept initials and some fresh ones, and compares each with the baseline kept in this browser. Keep a baseline before you change the renderer; after, open this page again and it shows anything that came out different: the baseline on the left, now on the right. Same machine and browser for both: other GPUs differ by a pixel here and there.</p>
+<p><button id="save">keep as the baseline</button><button id="compare">compare with the baseline</button></p>
+<div id="status"></div>
+<div id="slow"></div>
+<div id="diffs"></div>
+</main>
+<script type="module">
+	// ?auto=save or ?auto=compare runs at once, and leaves the result in window.check
+	import { render, random } from './initialis.js';
+	import { DEFAULTS, PARAMS } from '../render/src/params.js';
+	import { PRESETS, presetParams } from '../render/src/styles.js';
+
+	const SIZE = 192, $ = s => document.querySelector(s);
+	// the choices that pick a kind of thing to draw (not just which ink)
+	const KINDS = ['lLayout', 'lWeave', 'lFill', 'lPattern', 'lSplit', 'lFil', 'lEchoStyle', 'lShadow', 'lShadowFill', 'frame', 'fRuleStyle', 'fBand', 'fPattern', 'fShadowStyle',
+		'fCorner', 'orn', 'oRegion', 'oSeeds', 'oSym', 'oStemStyle', 'oTerminal', 'oLeaf', 'oFlower', 'oDetail', 'tKind', 'tWhere', 'tShape', 'tBubble', 'tCell', 'tTruchet', 'tCoral'];
+	// what turns a choice on, where the defaults leave it off
+	const ENABLE = [{ lFill: 'pattern' }, { lFill: 'split' }, { lFil: 'scroll' }, { lEcho: 1, lEchoW: 2 }, { lShadow: 'drop' }, { fRules: 1 }, { fShadow: 2 }, { fCorner: 'dots' },
+		{ lLayout: 'stack' }, { tKind: 'stipple' }, { tKind: 'bubbles' }, { tKind: 'cells' }, { tKind: 'truchet' }, { tKind: 'coral' }, { orn: 'grow' }, { fPattern: 'hatch' }, { text: 'AB' }];
+	const BY = Object.fromEntries(PARAMS.map(p => [p.key, p]));
+	const shows = (key, P) => !BY[key].when || BY[key].when(P);
+
+	async function cases() {
+		const out = [];
+		for (const key of KINDS) {
+			for (const v of BY[key].spec) {
+				let P = { ...DEFAULTS, [key]: v };
+				for (const e of ENABLE) { if (shows(key, P)) break; P = { ...DEFAULTS, ...e, [key]: v }; }
+				out.push({ name: `${key}=${v}`, P });
+			}
+		}
+		for (const pre of PRESETS) out.push({ name: 'style ' + pre.name, P: presetParams(pre) });
+		const kept = await fetch('../render/data/kept.json').then(r => r.json()).catch(() => []);
+		(kept.list || kept).forEach((k, i) => out.push({ name: 'kept ' + i, P: { ...DEFAULTS, ...(k.params || k) } }));
+		for (let s = 1; s <= 30; s++) out.push({ name: 'fresh ' + s, P: await random(s) });
+		return out;
+	}
+	async function fingerprint(bm) {
+		const cv = new OffscreenCanvas(bm.width, bm.height), x = cv.getContext('2d', { willReadFrequently: true });
+		x.drawImage(bm, 0, 0);
+		const d = x.getImageData(0, 0, bm.width, bm.height).data;
+		const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', d))].map(b => b.toString(16).padStart(2, '0')).join('');
+		const t = new OffscreenCanvas(128, 128);
+		t.getContext('2d').drawImage(bm, 0, 0, 128, 128);
+		return { h, thumb: await t.convertToBlob({ type: 'image/webp', quality: 0.9 }) };
+	}
+	// the baseline, in this browser (IndexedDB)
+	const db = () => new Promise((ok, no) => { const r = indexedDB.open('initialis-check', 1); r.onupgradeneeded = () => r.result.createObjectStore('base'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+	const put = async (k, v) => { const d = await db(); return new Promise(ok => { const t = d.transaction('base', 'readwrite'); t.objectStore('base').put(v, k); t.oncomplete = ok; }); };
+	const get = async (k) => { const d = await db(); return new Promise(ok => { const r = d.transaction('base').objectStore('base').get(k); r.onsuccess = () => ok(r.result); }); };
+
+	async function run(mode) {
+		const list = await cases(), base = mode === 'compare' ? await get('all') : null;
+		if (mode === 'compare' && !base) { $('#status').textContent = 'no baseline yet: keep one first'; return { error: 'no baseline' }; }
+		const now = {}, bad = [], failed = [], times = [], t0 = performance.now();
+		$('#diffs').replaceChildren();
+		let done = 0;
+		await Promise.all(list.map(async (c) => {
+			let bm = null;
+			// growth gets all the time it wants, so the same code always draws the same picture
+			try { bm = await render(c.P, { size: SIZE, paper: true, budget: 1e7, timed: ms => times.push([c.name, Math.round(ms)]) }); } catch (e) { failed.push(c.name + ': ' + e.message.slice(0, 80)); }
+			if (bm) {
+				const f = await fingerprint(bm);
+				bm.close();
+				now[c.name] = f;
+				if (base && base[c.name] && base[c.name].h !== f.h) bad.push(c.name);
+				if (base && !base[c.name]) bad.push(c.name + ' (new)');
+			}
+			$('#status').textContent = `${++done} of ${list.length}…`;
+		}));
+		// one that differs is drawn again, twice: a real change differs every time; once in a long
+		// while a busy canvas lands a pixel differently, and that one matches again
+		const unsteady = [];
+		if (base) for (const name of [...bad]) {
+			const c = list.find(x => x.name === name);
+			if (!c || !base[name]) continue;
+			for (let k = 0; k < 2; k++) {
+				const bm = await render(c.P, { size: SIZE, paper: true, budget: 1e7 }), f = await fingerprint(bm);
+				bm.close();
+				if (f.h === base[name].h) { bad.splice(bad.indexOf(name), 1); unsteady.push(name); break; }
+			}
+		}
+		const s = Math.round((performance.now() - t0) / 1000);
+		// the slowest: the field gives up on an initial after 8 s, and leaves its place empty
+		times.sort((a, b) => b[1] - a[1]);
+		const slowest = times.slice(0, 12);
+		$('#slow').textContent = times.length ? `slowest: ${slowest.map(([n, ms]) => `${n} ${(ms / 1000).toFixed(1)} s`).join(', ')}` : '';
+		if (mode === 'save') {
+			await put('all', now);
+			$('#status').textContent = `kept ${Object.keys(now).length} as the baseline (${s} s)` + (failed.length ? `; ${failed.length} failed to draw: ${failed.join('; ')}` : '');
+		} else {
+			$('#status').innerHTML = bad.length ? `<span class="bad">${bad.length} of ${list.length} came out different</span> (${s} s)` : `all ${list.length} the same as the baseline (${s} s)`;
+			if (unsteady.length) $('#status').innerHTML += `; matched when drawn again: ${unsteady.join(', ')}`;
+			if (failed.length) $('#status').innerHTML += `; <span class="bad">${failed.length} failed to draw</span>: ${failed.join('; ')}`;
+			for (const name of bad) {
+				const k = name.replace(' (new)', ''), el = document.createElement('div');
+				el.className = 'diff';
+				el.innerHTML = `<span>${name}</span><div></div>`;
+				for (const f of [base[k], now[k]]) {
+					const cv = document.createElement('canvas');
+					cv.width = cv.height = 128;
+					if (f) createImageBitmap(f.thumb).then(b => cv.getContext('2d').drawImage(b, 0, 0));
+					el.lastChild.append(cv);
+				}
+				$('#diffs').append(el);
+			}
+		}
+		return window.check = { mode, total: list.length, different: bad, unsteady, failed, slowest, seconds: s };
+	}
+	$('#save').onclick = () => run('save');
+	$('#compare').onclick = () => run('compare');
+	const auto = new URLSearchParams(location.search).get('auto');
+	if (auto) run(auto);
+</script>
+</body>
+</html>

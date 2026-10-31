@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INITIĀLIS as a library</title>
+<link rel="icon" href="../icons/icon-32.png">
+<style>
+	@font-face { font-family: 'ET Book'; src: url(../render/fonts/text/et-book-roman-old-style-figures.ttf); }
+	@font-face { font-family: 'ET Book'; font-style: italic; src: url(../render/fonts/text/et-book-display-italic-old-style-figures.ttf); }
+	:root { --paper: #f3efe6; --ink: #2b2824; --quiet: #857d70; }
+	body { margin: 0; background: var(--paper); color: var(--ink); font: 18px/1.45 'ET Book', Georgia, serif; }
+	main { padding: 32px 20px 80px; max-width: 760px; }
+	h1 { font-weight: normal; font-style: italic; font-size: 30px; margin: 0 0 6px; }
+	h2 { font-weight: normal; font-size: 21px; margin: 40px 0 6px; }
+	p { margin: 0 0 12px; }
+	pre { margin: 0 0 14px; padding: 10px 12px; background: #fbf8f1; overflow-x: auto; font: 13px/1.5 ui-monospace, Menlo, monospace; }
+	.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+	.quiet { color: var(--quiet); }
+	a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+<h1>INITIĀLIS as a library</h1>
+<p class="quiet">Any initial from <a href="../">the field</a> on your own page, drawn in the browser as the site draws it: one tag, or a few calls. It brings its own render workers and fetches the fonts from the site, so it works from anywhere. It needs WebGL2 in web workers: any current Chrome, Edge or Firefox, Safari 17 or later.</p>
+
+<h2>A tag, and an initial's settings</h2>
+<p>Load the library once, then give the tag an initial's settings: only what differs from the defaults. <code>{"text":"Q"}</code> alone is a Q in the default style; a few more keys change its face, frame and inks. Every setting, with its range, is <code>PARAMS</code> in <a href="../render/src/params.js">render/src/params.js</a>. A downloaded initial's <code>.json</code> has them as <code>params</code>, and any share link gives them with <code>&amp;format=json</code> on the end.</p>
+<pre>&lt;script type="module" src="https://initialis.azlen.me/lib/initialis.js"&gt;&lt;/script&gt;
+&lt;initialis-cap settings='{"text":"Q"}' size="200"&gt;&lt;/initialis-cap&gt;
+&lt;initialis-cap settings='{"text":"Q","font":"cinzel-700","frame":"circle","inkA":"#23305e"}' size="200"&gt;&lt;/initialis-cap&gt;
+&lt;initialis-cap settings='{"text":"R","font":"cinzel-700","frame":"circle","inkA":"#23305e","inkB":"#cb1b45","oFill":"B"}' size="200" paper&gt;&lt;/initialis-cap&gt;</pre>
+<div class="row">
+	<initialis-cap settings='{"text":"Q"}' size="200"></initialis-cap>
+	<initialis-cap settings='{"text":"Q","font":"cinzel-700","frame":"circle","inkA":"#23305e"}' size="200"></initialis-cap>
+	<initialis-cap settings='{"text":"R","font":"cinzel-700","frame":"circle","inkA":"#23305e","inkB":"#cb1b45","oFill":"B"}' size="200" paper></initialis-cap>
+</div>
+<p class="quiet">The last is printed on its own paper (<code>paper</code>) rather than the ink alone on a transparent ground.</p>
+
+<h2>From a share link</h2>
+<p><code>src</code> takes a link copied from <b>share</b>, or just its code. A long link carries the settings in itself; a short one is looked up on the site each time a page shows it, so for keeps, take its settings (<code>&amp;format=json</code>) instead.</p>
+<pre>&lt;initialis-cap src="https://initialis.azlen.me/?i=iPqsVuiDIn" size="200"&gt;&lt;/initialis-cap&gt;</pre>
+<div class="row"><initialis-cap src="https://initialis.azlen.me/?i=iPqsVuiDIn" size="200"></initialis-cap></div>
+
+<h2>Growing in</h2>
+<p><code>grow</code> plays it growing in once it's on screen; <code>loop</code> plays it again and again.</p>
+<pre>&lt;initialis-cap seed="31" size="200" grow&gt;&lt;/initialis-cap&gt;</pre>
+<div class="row"><initialis-cap seed="31" size="200" grow></initialis-cap><initialis-cap seed="58" size="200" loop></initialis-cap></div>
+
+<h2>Fresh ones</h2>
+<p>With <code>seed</code>, a fresh initial as the field makes them (the same seed gives the same one); with neither src nor seed, a new one each load.</p>
+<pre>&lt;initialis-cap seed="1" size="120"&gt;&lt;/initialis-cap&gt;</pre>
+<div class="row">
+	<initialis-cap seed="1" size="120"></initialis-cap><initialis-cap seed="2" size="120"></initialis-cap><initialis-cap seed="3" size="120"></initialis-cap>
+	<initialis-cap seed="4" size="120"></initialis-cap><initialis-cap size="120"></initialis-cap>
+</div>
+
+<h2>In a script</h2>
+<p>Into a canvas of your own: <code>draw</code>, <code>grow</code>, <code>render</code> (an ImageBitmap), <code>settings</code> (the full settings, from settings, a share link or code, or a downloaded <code>.json</code>) and <code>random</code>. Settings are plain objects, to change as you like: the same initial as another letter, in other inks.</p>
+<pre>import { draw, grow, settings, random } from 'https://initialis.azlen.me/lib/initialis.js';
+
+const canvas = document.querySelector('canvas');
+await draw(canvas, { text: 'Q', frame: 'circle' });               // its size: the canvas's own on the page
+const P = await random(7);                                        // a fresh one's settings
+await grow(canvas, { ...P, text: 'M', inkA: '#23305e' }, { seconds: 2.4, paper: true });</pre>
+<canvas id="mine" style="width: 200px; height: 200px"></canvas>
+<script type="module">
+	import { grow, random } from './initialis.js';
+	const P = await random(7);
+	grow(document.getElementById('mine'), { ...P, text: 'M', inkA: '#23305e' }, { seconds: 2.4, paper: true, loop: true });
+</script>
+</main>
+<script type="module" src="initialis.js"></script>
+</body>
+</html>
